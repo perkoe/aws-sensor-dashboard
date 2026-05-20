@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GY-91 Senzorski Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface-2: #222535;
+            --border: rgba(255,255,255,0.08);
+            --text: #e8eaf0;
+            --text-muted: #8b90a0;
+            --primary: #4f9cf9;
+            --secondary: #f97b4f;
+            --success: #4fcf8a;
+            --chip: rgba(79,156,249,0.12);
+            --chip-active: #4f9cf9;
+            --chip-text: #b8d4ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Satoshi', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem; }
+        header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+        .logo { width: 40px; height: 40px; background: linear-gradient(135deg, var(--primary), var(--secondary)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        h1 { font-size: 1.4rem; font-weight: 700; }
+        .subtitle { color: var(--text-muted); font-size: 0.85rem; }
+        .status { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--success); }
+        .dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .error { background: rgba(249,123,79,0.1); border: 1px solid rgba(249,123,79,0.3); border-radius: 10px; padding: 1rem 1.5rem; color: var(--secondary); font-size: 0.9rem; margin-bottom: 1.5rem; display: none; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .filter-group { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .filter-label { color: var(--text-muted); font-size: 0.82rem; }
+        .filter-btn { background: var(--chip); border: 1px solid transparent; color: var(--chip-text); padding: 0.45rem 0.85rem; border-radius: 999px; cursor: pointer; font-size: 0.8rem; font-family: inherit; transition: 0.2s ease; }
+        .filter-btn:hover { border-color: rgba(79,156,249,0.35); }
+        .filter-btn.active { background: var(--chip-active); color: white; }
+        .refresh-btn { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); padding: 0.45rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-family: inherit; }
+        .refresh-btn:hover { background: rgba(79,156,249,0.15); color: var(--primary); }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem 1.5rem; }
+        .kpi-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+        .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+        .kpi-value.temp { color: var(--secondary); }
+        .kpi-value.pressure { color: var(--primary); }
+        .kpi-unit { font-size: 0.9rem; font-weight: 400; color: var(--text-muted); margin-left: 2px; }
+        .kpi-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem; }
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+        @media (max-width: 768px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            body { padding: 1rem; }
+            .status { margin-left: 0; }
+        }
+        .chart-card, .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.5rem; }
+        .chart-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.35rem; }
+        .chart-subtitle { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem; }
+        .chart-wrap { position: relative; height: 260px; }
+        .table-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+        td { padding: 0.6rem 0.75rem; font-size: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.04); font-variant-numeric: tabular-nums; }
+        tr:last-child td { border-bottom: none; }
+    </style>
+</head>
+<body>
+<header>
+    <div class="logo">🌡</div>
+    <div>
+        <h1>GY-91 Senzorski Dashboard</h1>
+        <div class="subtitle">ESP8266 WeMos D1 Mini · AWS IoT Core · MQTT</div>
+    </div>
+    <div class="status"><div class="dot"></div><span id="status-text">Nalagam...</span></div>
+</header>
+
+<div class="error" id="error-box">Napaka pri nalaganju podatkov.</div>
+
+<div class="toolbar">
+    <div class="filter-group">
+        <span class="filter-label">Časovni filter:</span>
+        <button class="filter-btn" data-hours="1">1h</button>
+        <button class="filter-btn" data-hours="6">6h</button>
+        <button class="filter-btn" data-hours="12">12h</button>
+        <button class="filter-btn active" data-hours="24">24h</button>
+        <button class="filter-btn" data-hours="168">7d</button> 
+    </div>
+    <button class="refresh-btn" onclick="fetchData()">↻ Osveži podatke</button>
+</div>
+
+<div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Trenutna temperatura</div><div class="kpi-value temp" id="kpi-temp">--<span class="kpi-unit">°C</span></div><div class="kpi-meta" id="kpi-temp-time">--</div></div>
+    <div class="kpi"><div class="kpi-label">Trenutni tlak</div><div class="kpi-value pressure" id="kpi-pressure">--<span class="kpi-unit">hPa</span></div><div class="kpi-meta" id="kpi-pressure-time">--</div></div>
+    <div class="kpi"><div class="kpi-label">Min temperatura</div><div class="kpi-value" style="font-size:1.5rem;color:var(--text)" id="kpi-temp-min">--<span class="kpi-unit">°C</span></div><div class="kpi-meta" id="kpi-temp-min-meta">zadnjih 24h</div></div>
+    <div class="kpi"><div class="kpi-label">Max temperatura</div><div class="kpi-value" style="font-size:1.5rem;color:var(--text)" id="kpi-temp-max">--<span class="kpi-unit">°C</span></div><div class="kpi-meta" id="kpi-temp-max-meta">zadnjih 24h</div></div>
+</div>
+
+<div class="charts-grid">
+    <div class="chart-card">
+        <div class="chart-title">Temperatura (°C)</div>
+        <div class="chart-subtitle" id="temp-range-label">Prikaz za zadnjih 24 ur</div>
+        <div class="chart-wrap"><canvas id="tempChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+        <div class="chart-title">Barometrični tlak (hPa)</div>
+        <div class="chart-subtitle" id="press-range-label">Prikaz za zadnjih 24 ur</div>
+        <div class="chart-wrap"><canvas id="pressChart"></canvas></div>
+    </div>
+</div>
+
+<div class="table-card">
+    <div class="table-title">Zadnje meritve</div>
+    <table>
+        <thead><tr><th>Čas meritve</th><th>Temperatura (°C)</th><th>Tlak (hPa)</th><th>Naprava</th></tr></thead>
+        <tbody id="table-body"><tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:2rem">Nalagam...</td></tr></tbody>
+    </table>
+</div>
+
+<script>
+const API_URL = 'https://wsi65b9a1i.execute-api.eu-north-1.amazonaws.com/prod/sensor-data';
+let tempChart, pressChart;
+let selectedHours = 24;
+
+function buildApiUrl(hours) {
+    const url = new URL(API_URL);
+    url.searchParams.set('hours', hours);
+    return url.toString();
+}
+
+function formatRangeLabel(hours) {
+    if (hours === 168) return 'Prikaz za zadnjih 7 dni';
+    if (hours === 1)   return 'Prikaz za zadnjo 1 uro';
+    if (hours === 2)   return 'Prikaz za zadnji 2 uri';
+    if (hours < 5)     return `Prikaz za zadnje ${hours} ure`;
+    return `Prikaz za zadnjih ${hours} ur`;
+}
+
+function getTickLimit(hours) {
+    if (hours <= 1)   return 6;
+    if (hours <= 6)   return 8;
+    if (hours <= 12)  return 10;
+    if (hours <= 24)  return 12;
+    return 14;  // 7d — več točk na osi
+}
+
+function initCharts() {
+    const base = {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: { legend: { display: false } },
+        scales: {
+            x: {
+                ticks: { color: '#8b90a0', font: { size: 10 } },
+                grid: { color: 'rgba(255,255,255,0.05)' }
+            },
+            y: {
+                ticks: { color: '#8b90a0', font: { size: 10 } },
+                grid: { color: 'rgba(255,255,255,0.05)' }
+            }
+        }
+    };
+
+    tempChart = new Chart(document.getElementById('tempChart'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ data: [], borderColor: '#f97b4f', backgroundColor: 'rgba(249,123,79,0.08)', tension: 0.35, fill: true, pointRadius: 2, pointHoverRadius: 4, pointBackgroundColor: '#f97b4f', borderWidth: 2 }] },
+        options: {
+            ...base,
+            scales: {
+                ...base.scales,
+                x: { ...base.scales.x, ticks: { ...base.scales.x.ticks, maxTicksLimit: getTickLimit(selectedHours) } },
+                y: { ...base.scales.y, ticks: { ...base.scales.y.ticks, callback: v => Number(v).toFixed(1) + '°' } }
+            }
+        }
+    });
+
+    pressChart = new Chart(document.getElementById('pressChart'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ data: [], borderColor: '#4f9cf9', backgroundColor: 'rgba(79,156,249,0.08)', tension: 0.35, fill: true, pointRadius: 2, pointHoverRadius: 4, pointBackgroundColor: '#4f9cf9', borderWidth: 2 }] },
+        options: {
+            ...base,
+            scales: {
+                ...base.scales,
+                x: { ...base.scales.x, ticks: { ...base.scales.x.ticks, maxTicksLimit: getTickLimit(selectedHours) } },
+                y: { ...base.scales.y, ticks: { ...base.scales.y.ticks, callback: v => Number(v).toFixed(0) } }
+            }
+        }
+    });
+}
+
+function updateFilterButtons() {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.hours) === selectedHours);
+    });
+    const label = formatRangeLabel(selectedHours);
+    document.getElementById('temp-range-label').textContent = label;
+    document.getElementById('press-range-label').textContent = label;
+    const metaLabel = hours === 168 ? 'zadnjih 7 dni' : `zadnjih ${hours}h`;
+document.getElementById('kpi-temp-min-meta').textContent = metaLabel;
+document.getElementById('kpi-temp-max-meta').textContent = metaLabel;
+}
+
+function updateCharts(sorted) {
+    const labels = sorted.map(d => new Date(d.timestamp).toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' }));
+    const temps = sorted.map(d => parseFloat(d.temperature));
+    const pressures = sorted.map(d => parseFloat(d.pressure));
+
+    tempChart.data.labels = labels;
+    tempChart.data.datasets[0].data = temps;
+    tempChart.options.scales.x.ticks.maxTicksLimit = getTickLimit(selectedHours);
+    tempChart.update();
+
+    pressChart.data.labels = labels;
+    pressChart.data.datasets[0].data = pressures;
+    pressChart.options.scales.x.ticks.maxTicksLimit = getTickLimit(selectedHours);
+    pressChart.update();
+
+    return { temps, pressures };
+}
+
+function updateKpis(sorted, temps, pressures) {
+    if (!sorted.length) return;
+    const latest = sorted[sorted.length - 1];
+    const latestTime = new Date(latest.timestamp).toLocaleString('sl-SI');
+    document.getElementById('kpi-temp').innerHTML = parseFloat(latest.temperature).toFixed(1) + '<span class="kpi-unit">°C</span>';
+    document.getElementById('kpi-pressure').innerHTML = parseFloat(latest.pressure).toFixed(1) + '<span class="kpi-unit">hPa</span>';
+    document.getElementById('kpi-temp-time').textContent = 'ob ' + latestTime;
+    document.getElementById('kpi-pressure-time').textContent = 'ob ' + latestTime;
+    document.getElementById('kpi-temp-min').innerHTML = Math.min(...temps).toFixed(1) + '<span class="kpi-unit">°C</span>';
+    document.getElementById('kpi-temp-max').innerHTML = Math.max(...temps).toFixed(1) + '<span class="kpi-unit">°C</span>';
+}
+
+function updateTable(sorted) {
+    document.getElementById('table-body').innerHTML = [...sorted].reverse().slice(0, 20).map(d => `
+        <tr>
+            <td>${new Date(d.timestamp).toLocaleString('sl-SI')}</td>
+            <td style="color:#f97b4f;font-weight:500">${parseFloat(d.temperature).toFixed(2)}</td>
+            <td style="color:#4f9cf9;font-weight:500">${parseFloat(d.pressure).toFixed(2)}</td>
+            <td style="color:var(--text-muted)">${d.device}</td>
+        </tr>`).join('');
+}
+
+async function fetchData() {
+    try {
+        const res = await fetch(buildApiUrl(selectedHours));
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const sorted = [...data]
+            .filter(d => d.timestamp && d.temperature != null && d.pressure != null)
+            .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+        document.getElementById('error-box').style.display = 'none';
+        document.getElementById('status-text').textContent = 'V živo · ' + new Date().toLocaleTimeString('sl-SI');
+
+        if (!sorted.length) {
+            document.getElementById('table-body').innerHTML = '<tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:2rem">Ni podatkov za izbrano obdobje.</td></tr>';
+            return;
+        }
+
+        const { temps, pressures } = updateCharts(sorted);
+        updateKpis(sorted, temps, pressures);
+        updateTable(sorted);
+    } catch (e) {
+        document.getElementById('error-box').style.display = 'block';
+        document.getElementById('status-text').textContent = 'Napaka';
+        console.error(e);
+    }
+}
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        selectedHours = Number(btn.dataset.hours);
+        updateFilterButtons();
+        fetchData();
+    });
+});
+
+initCharts();
+updateFilterButtons();
+fetchData();
+setInterval(fetchData, 10000);
+</script>
+</body>
+</html>
