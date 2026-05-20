@@ -195,9 +195,9 @@ function updateFilterButtons() {
     const label = formatRangeLabel(selectedHours);
     document.getElementById('temp-range-label').textContent = label;
     document.getElementById('press-range-label').textContent = label;
-    const metaLabel = hours === 168 ? 'zadnjih 7 dni' : `zadnjih ${hours}h`;
-document.getElementById('kpi-temp-min-meta').textContent = metaLabel;
-document.getElementById('kpi-temp-max-meta').textContent = metaLabel;
+    const metaLabel = selectedHours === 168 ? 'zadnjih 7 dni' : `zadnjih ${selectedHours}h`;
+    document.getElementById('kpi-temp-min-meta').textContent = metaLabel;
+    document.getElementById('kpi-temp-max-meta').textContent = metaLabel;
 }
 
 function updateCharts(sorted) {
